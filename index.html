@@ -57,7 +57,7 @@
 
             // 4. Construir y Linkear Manifiesto ROBUSTO para Android
             const manifest = {
-                "id": "/presupuestador-app-v1.4", // ID actualizado
+                "id": "/presupuestador-app-v1.5", // ID actualizado
                 "name": "Presupuestador Rápido",
                 "short_name": "Presupuestos",
                 "start_url": "./index.html",
@@ -299,7 +299,7 @@
         // ==========================================
         //  CONFIGURACIÓN FIJA
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
-        const APP_VERSION = "v1.4 (Historial)";
+        const APP_VERSION = "v1.5 (Detalle Historial)";
         // ==========================================
 
         const normalize = (str) => {
@@ -961,6 +961,19 @@
             showToast("Presupuesto guardado");
         }
 
+        function toggleBudgetDetail(id) {
+            const detail = document.getElementById(`details-${id}`);
+            const icon = document.getElementById(`icon-${id}`);
+            
+            if (detail.classList.contains('hidden')) {
+                detail.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                detail.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        }
+
         function renderSavedBudgets() {
             const container = document.getElementById('savedListContainer');
             container.innerHTML = '';
@@ -977,29 +990,41 @@
 
             state.saved.forEach(budget => {
                 const el = document.createElement('div');
-                el.className = "bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col gap-2";
+                el.className = "bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-3"; // overflow-hidden para la animación suave
                 
-                // Extraer cliente del texto si es necesario, o usar el campo name
                 const displayName = budget.name || "Sin nombre";
 
                 el.innerHTML = `
-                    <div class="flex justify-between items-start">
+                    <!-- Header (Clickable) -->
+                    <div onclick="toggleBudgetDetail(${budget.id})" class="p-3 flex justify-between items-center cursor-pointer bg-gray-50/50 hover:bg-gray-100 transition select-none">
                         <div>
-                            <h4 class="font-bold text-gray-800">${displayName}</h4>
-                            <span class="text-xs text-gray-500">${budget.date}</span>
+                             <h4 class="font-bold text-gray-800 text-sm">${displayName}</h4>
+                             <span class="text-[10px] text-gray-500 font-medium">${budget.date}</span>
                         </div>
-                        <span class="font-bold text-[#008069]">${formatMoney(budget.total)}</span>
+                        <div class="flex items-center gap-3">
+                            <span class="font-bold text-[#008069] text-sm">${formatMoney(budget.total)}</span>
+                            <i id="icon-${budget.id}" class="ph ph-caret-down text-gray-400 transition-transform duration-300 text-lg"></i>
+                        </div>
                     </div>
-                    <div class="flex gap-2 mt-2 pt-2 border-t border-gray-50 justify-end">
-                        <button onclick="deleteSavedBudget(${budget.id})" class="p-2 text-red-500 bg-red-50 rounded hover:bg-red-100">
-                            <i class="ph ph-trash"></i>
-                        </button>
-                         <button onclick="shareSavedText('${encodeURIComponent(budget.text)}')" class="p-2 text-[#25D366] bg-green-50 rounded hover:bg-green-100 flex gap-1 items-center font-bold text-xs">
-                            <i class="ph ph-whatsapp-logo text-lg"></i> Enviar
-                        </button>
-                        <button onclick="copySavedText('${encodeURIComponent(budget.text)}')" class="p-2 text-gray-600 bg-gray-100 rounded hover:bg-gray-200 flex gap-1 items-center font-bold text-xs">
-                            <i class="ph ph-copy text-lg"></i> Copiar
-                        </button>
+
+                    <!-- Details (Hidden by default) -->
+                    <div id="details-${budget.id}" class="hidden border-t border-gray-100 bg-white">
+                        <div class="p-3 text-xs text-gray-600 font-mono whitespace-pre-wrap bg-gray-50 m-2 rounded border border-gray-100 leading-relaxed">
+${budget.text}
+                        </div>
+                        
+                        <!-- Actions Footer -->
+                        <div class="flex gap-2 p-2 justify-end bg-white border-t border-gray-50">
+                            <button onclick="deleteSavedBudget(${budget.id})" class="p-2 text-red-500 bg-red-50 rounded hover:bg-red-100 transition" title="Eliminar">
+                                <i class="ph ph-trash text-lg"></i>
+                            </button>
+                             <button onclick="shareSavedText('${encodeURIComponent(budget.text)}')" class="px-3 py-2 text-[#25D366] bg-green-50 rounded hover:bg-green-100 flex gap-1 items-center font-bold text-xs transition">
+                                <i class="ph ph-whatsapp-logo text-lg"></i> WhatsApp
+                            </button>
+                            <button onclick="copySavedText('${encodeURIComponent(budget.text)}')" class="px-3 py-2 text-gray-600 bg-gray-100 rounded hover:bg-gray-200 flex gap-1 items-center font-bold text-xs transition">
+                                <i class="ph ph-copy text-lg"></i> Copiar
+                            </button>
+                        </div>
                     </div>
                 `;
                 container.appendChild(el);
