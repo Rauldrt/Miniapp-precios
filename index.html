@@ -34,6 +34,29 @@
         /* Puntos de paginación del tutorial */
         .dot { transition: all 0.3s; }
         .dot.active { background-color: #008069; transform: scale(1.2); }
+        
+        /* Estilos para el Toggle de Variantes */
+        .variant-pill {
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            text-transform: uppercase;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .variant-pill.active {
+            background-color: #e6fcf5; /* green-50 */
+            color: #008069;
+            border-color: #008069;
+        }
+        .variant-pill.inactive {
+            background-color: #f3f4f6; /* gray-100 */
+            color: #6b7280; /* gray-500 */
+            border-color: #e5e7eb;
+        }
     </style>
 
     <!-- SCRIPT PWA: Generación dinámica del Manifiesto e Iconos -->
@@ -57,7 +80,7 @@
 
             // 4. Construir y Linkear Manifiesto ROBUSTO para Android
             const manifest = {
-                "id": "/presupuestador-app-v1.5", // ID actualizado
+                "id": "/presupuestador-app-v1.7", // ID actualizado
                 "name": "Presupuestador Rápido",
                 "short_name": "Presupuestos",
                 "start_url": "./index.html",
@@ -247,6 +270,19 @@
                            class="w-full border p-3 rounded-lg text-sm focus:ring-2 focus:ring-[#008069] outline-none">
                     <p class="text-xs text-gray-500 mt-1">Archivo > Compartir > Publicar en la web > CSV</p>
                 </div>
+
+                <!-- GUIA VISUAL DE COLUMNAS -->
+                <div class="bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800">
+                    <p class="font-bold mb-1 flex items-center gap-1">
+                        <i class="ph ph-info text-sm"></i> Estructura del CSV:
+                    </p>
+                    <ul class="list-none space-y-1 ml-1">
+                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col A</b> Nombre del producto <span class="text-blue-600">(Obligatorio)</span></li>
+                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col B</b> Precio <span class="text-blue-600">(Obligatorio, solo nros)</span></li>
+                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col C</b> Presentación <span class="text-gray-500">(Ej: "x kg")</span></li>
+                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col D</b> Fecha Act. <span class="text-gray-500">(Ej: "12/05")</span></li>
+                    </ul>
+                </div>
                 
                 <div class="flex justify-between items-center bg-gray-50 p-3 rounded text-sm">
                     <span class="text-gray-600">Última actualización:</span>
@@ -299,7 +335,7 @@
         // ==========================================
         //  CONFIGURACIÓN FIJA
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
-        const APP_VERSION = "v1.5 (Detalle Historial)";
+        const APP_VERSION = "v1.7 (Agrupado)";
         // ==========================================
 
         const normalize = (str) => {
@@ -309,8 +345,9 @@
 
         const state = {
             products: [],   // { id, name, price, presentation, searchString, lastUpdate }
+            groups: [],     // { groupIndex, name, ids: [id1, id2], activeIndex, searchString }
             cart: {},       // { id: qty }
-            saved: [],      // Array de presupuestos guardados { id, name, date, total, text }
+            saved: [],      // { id, name, date, total, text }
             config: {
                 url: '',
                 lastUpdated: 0
@@ -371,9 +408,9 @@
                 text: "Encuentra productos por nombre, marca o tipo. <br><b>No importa el orden de las palabras</b>."
             },
             {
-                icon: "ph-hand-tap",
-                title: "Selección Rápida",
-                text: "Toca una tarjeta para agregar 1 unidad. <br>Si seleccionas <b>un solo producto</b>, ¡se copia automáticamente al portapapeles!"
+                icon: "ph-stack",
+                title: "Productos Agrupados",
+                text: "Si un producto tiene varias presentaciones (Unidad, Bulto), verás botones para cambiar entre ellas en la misma tarjeta."
             },
             {
                 icon: "ph-floppy-disk",
@@ -488,10 +525,11 @@
             if (storedProducts) {
                 try {
                     state.products = JSON.parse(storedProducts);
+                    // Reconstruir grupos en memoria
+                    buildGroups();
                 } catch(e) {}
             }
 
-            // Cargar guardados
             const storedSaved = localStorage.getItem('app_saved_budgets');
             if (storedSaved) {
                 try {
@@ -605,6 +643,30 @@
             });
 
             state.products = products;
+            buildGroups();
+        }
+
+        function buildGroups() {
+            const groupsMap = new Map();
+            state.products.forEach(p => {
+                const key = normalize(p.name);
+                if(!groupsMap.has(key)) {
+                    groupsMap.set(key, {
+                        name: p.name,
+                        ids: [],
+                        searchString: ''
+                    });
+                }
+                const group = groupsMap.get(key);
+                group.ids.push(p.id);
+                group.searchString += ' ' + p.searchString;
+            });
+            // Convert map to array and assign groupIndex
+            state.groups = Array.from(groupsMap.values()).map((g, i) => ({
+                ...g, 
+                groupIndex: i, 
+                activeIndex: 0 
+            }));
         }
 
         function parseLocaleNumber(stringNumber) {
@@ -629,32 +691,32 @@
             }
         }
 
-        // --- RENDERIZADO OPTIMIZADO ---
+        // --- RENDERIZADO OPTIMIZADO PARA GRUPOS ---
         function renderList(filterText = '') {
             const list = document.getElementById('productList');
             const limitMsg = document.getElementById('limitMessage');
             list.innerHTML = '';
 
             const cleanFilter = normalize(filterText).trim();
-            let filtered = state.products;
+            let filteredGroups = state.groups;
 
             if (cleanFilter) {
                 const terms = cleanFilter.split(/\s+/);
-                filtered = state.products.filter(p => {
-                    return terms.every(term => p.searchString.includes(term));
+                filteredGroups = state.groups.filter(g => {
+                    return terms.every(term => g.searchString.includes(term));
                 });
             }
 
-            if (filtered.length === 0) {
+            if (filteredGroups.length === 0) {
                 list.innerHTML = `<div class="col-span-full text-center text-gray-400 mt-10">No se encontraron productos</div>`;
                 limitMsg.classList.add('hidden');
                 return;
             }
 
             const MAX_ITEMS = 100;
-            const itemsToShow = filtered.slice(0, MAX_ITEMS);
+            const itemsToShow = filteredGroups.slice(0, MAX_ITEMS);
             
-            if (filtered.length > MAX_ITEMS) {
+            if (filteredGroups.length > MAX_ITEMS) {
                 limitMsg.classList.remove('hidden');
             } else {
                 limitMsg.classList.add('hidden');
@@ -662,13 +724,21 @@
 
             const fragment = document.createDocumentFragment();
 
-            itemsToShow.forEach(p => {
+            itemsToShow.forEach(group => {
+                // Get current active product in the group
+                const activeId = group.ids[group.activeIndex];
+                const p = state.products.find(prod => prod.id === activeId);
+                
+                if(!p) return;
+
                 const qty = state.cart[p.id] || 0;
                 const isSelected = qty > 0;
                 
                 const el = document.createElement('div');
-                el.id = `card-${p.id}`;
+                el.id = `group-card-${group.groupIndex}`;
                 el.className = `p-3 rounded-xl shadow-sm border card-transition cursor-pointer select-none flex flex-col justify-between h-full ${isSelected ? 'bg-green-50 border-[#25D366] ring-1 ring-[#25D366]' : 'bg-white border-gray-200 hover:border-gray-300'}`;
+                
+                // Click on card adds/selects the ACTIVE variant
                 el.onclick = (e) => handleCardClick(e, p.id);
 
                 const formattedPrice = formatMoney(p.price);
@@ -680,22 +750,46 @@
                     ? `<span class="text-[10px] text-gray-400 mt-0.5 block">Act: ${p.lastUpdate}</span>`
                     : '';
 
+                // Variant Toggle HTML
+                let variantsHtml = '';
+                if (group.ids.length > 1) {
+                    variantsHtml = `<div class="flex gap-1 mb-2 overflow-x-auto no-scrollbar" onclick="event.stopPropagation()">`;
+                    group.ids.forEach((vid, idx) => {
+                        const vp = state.products.find(x => x.id === vid);
+                        const isActive = idx === group.activeIndex;
+                        const label = vp.presentation ? vp.presentation : (idx === 0 ? 'Opción 1' : 'Opción 2');
+                        // Simplificación de etiquetas para casos comunes
+                        const displayLabel = label.toLowerCase().includes('bulto') || label.toLowerCase().includes('pack') ? 'Bulto' : 'Unidad';
+                        
+                        variantsHtml += `
+                            <div onclick="toggleVariant(${group.groupIndex}, ${idx})" 
+                                 class="variant-pill ${isActive ? 'active' : 'inactive'}">
+                                ${label}
+                            </div>
+                        `;
+                    });
+                    variantsHtml += `</div>`;
+                }
+
                 el.innerHTML = `
                     <div class="flex-1 w-full flex flex-col items-start">
-                        <h3 id="name-${p.id}" class="font-medium text-gray-800 text-sm leading-snug w-full line-clamp-2 ${isSelected ? 'text-[#008069] font-bold' : ''}">${p.name}</h3>
-                        ${presentationBadge}
-                        <div class="mt-2 w-full">
+                        <h3 class="font-medium text-gray-800 text-sm leading-snug w-full line-clamp-2 ${isSelected ? 'text-[#008069] font-bold' : ''}">${p.name}</h3>
+                        ${variantsHtml ? '' : presentationBadge} 
+                        
+                        ${variantsHtml}
+
+                        <div class="mt-auto w-full">
                             <p class="text-[#008069] font-bold text-base leading-none">${formattedPrice}</p>
                             ${dateText}
                         </div>
                     </div>
                     
                     <div id="controls-${p.id}" class="${isSelected ? 'flex' : 'hidden'} items-center justify-between w-full mt-3 bg-white/50 rounded-lg p-1 gap-2" onclick="event.stopPropagation()">
-                        <button class="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-white border border-gray-200 shadow-sm rounded-lg text-gray-600 active:bg-gray-100" onclick="updateQty(${p.id}, -1)">
+                        <button class="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-white border border-gray-200 shadow-sm rounded-lg text-gray-600 active:bg-gray-100" onclick="updateQty(${p.id}, -1, ${group.groupIndex})">
                             <i class="ph ph-minus font-bold text-xs"></i>
                         </button>
                         <span id="qty-${p.id}" class="flex-1 text-center font-bold text-base min-w-[20px]">${qty}</span>
-                        <button class="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-[#25D366] text-white shadow-sm rounded-lg active:bg-[#1da851]" onclick="updateQty(${p.id}, 1)">
+                        <button class="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-[#25D366] text-white shadow-sm rounded-lg active:bg-[#1da851]" onclick="updateQty(${p.id}, 1, ${group.groupIndex})">
                             <i class="ph ph-plus font-bold text-xs"></i>
                         </button>
                     </div>
@@ -706,67 +800,14 @@
             list.appendChild(fragment);
         }
 
-        // --- FUNCIONES CARRITO VISTA ---
-        function toggleCartView() {
-            const modal = document.getElementById('cartModal');
-            const isClosed = modal.classList.contains('translate-y-full');
-            
-            if (isClosed) {
-                renderCartView();
-                modal.classList.remove('translate-y-full');
-            } else {
-                modal.classList.add('translate-y-full');
-            }
-        }
-
-        function renderCartView() {
-            const container = document.getElementById('cartListContainer');
-            container.innerHTML = '';
-            
-            const cartEntries = Object.entries(state.cart);
-            
-            if (cartEntries.length === 0) {
-                container.innerHTML = `
-                    <div class="col-span-full flex flex-col items-center justify-center h-64 text-gray-400">
-                        <i class="ph ph-shopping-cart text-6xl mb-4 text-gray-300"></i>
-                        <p class="text-lg">Tu carrito está vacío</p>
-                    </div>
-                `;
-                return;
-            }
-
-            cartEntries.forEach(([id, qty]) => {
-                const p = state.products.find(prod => prod.id == id);
-                if (!p) return;
-
-                const subtotal = p.price * qty;
-                const presText = p.presentation ? `<span class="inline-block mt-1 bg-gray-100 text-gray-500 text-[10px] font-semibold px-2 py-0.5 rounded border border-gray-200 uppercase tracking-wide">${p.presentation}</span>` : '';
-                
-                const el = document.createElement('div');
-                el.className = "p-3 rounded-xl shadow-sm border border-gray-200 bg-white flex flex-col justify-between h-full";
-                
-                el.innerHTML = `
-                    <div class="flex-1 w-full flex flex-col items-start">
-                        <h4 class="font-medium text-gray-800 text-sm leading-snug w-full line-clamp-2">${p.name}</h4>
-                        ${presText}
-                        <div class="mt-2 w-full">
-                            <p class="text-[#008069] font-bold text-base">${formatMoney(p.price)}</p>
-                            <p class="text-xs text-gray-400 mt-0.5">Total: ${formatMoney(subtotal)}</p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-center justify-between w-full mt-3 bg-gray-50 rounded-lg p-1 gap-2">
-                        <button class="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-white border border-gray-200 shadow-sm rounded-lg text-gray-600 active:bg-gray-100" onclick="updateQty(${p.id}, -1)">
-                            <i class="ph ${qty === 1 ? 'ph-trash text-red-500' : 'ph-minus'} font-bold text-xs"></i>
-                        </button>
-                        <span class="flex-1 text-center font-bold text-base min-w-[20px]">${qty}</span>
-                        <button class="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-[#25D366] text-white shadow-sm rounded-lg active:bg-[#1da851]" onclick="updateQty(${p.id}, 1)">
-                            <i class="ph ph-plus font-bold text-xs"></i>
-                        </button>
-                    </div>
-                `;
-                container.appendChild(el);
-            });
+        // --- FUNCIONES LOGICA UI ---
+        
+        function toggleVariant(groupIndex, newIndex) {
+            state.groups[groupIndex].activeIndex = newIndex;
+            // Re-renderizar solo la lista es lo más seguro para mantener consistencia visual rápida
+            // Podríamos optimizar re-renderizando solo esa carta, pero renderList es rápido
+            // Para mantener el foco, idealmente buscamos el input, pero aqui es un click de boton
+            renderList(document.getElementById('searchInput').value);
         }
 
         function formatMoney(amount) {
@@ -775,7 +816,12 @@
 
         function handleCardClick(e, id) {
             if (!state.cart[id]) {
-                updateQty(id, 1);
+                // Necesitamos el groupIndex para pasar a updateQty si queremos refrescar solo la carta
+                // Buscamos el producto para saber su grupo
+                const p = state.products.find(x => x.id === id);
+                const grp = state.groups.find(g => g.ids.includes(id));
+                updateQty(id, 1, grp ? grp.groupIndex : null);
+                
                 const input = document.getElementById('searchInput');
                 setTimeout(() => {
                     input.focus();
@@ -784,7 +830,7 @@
             }
         }
 
-        function updateQty(id, change) {
+        function updateQty(id, change, groupIndex) {
             const current = state.cart[id] || 0;
             const newQty = current + change;
 
@@ -794,25 +840,12 @@
                 state.cart[id] = newQty;
             }
 
-            const cardEl = document.getElementById(`card-${id}`);
-            if (cardEl) {
-                const nameEl = document.getElementById(`name-${id}`);
-                const controlsEl = document.getElementById(`controls-${id}`);
-                const qtyEl = document.getElementById(`qty-${id}`);
-
-                if (newQty > 0) {
-                    cardEl.className = `p-3 rounded-xl shadow-sm border card-transition cursor-pointer select-none flex flex-col justify-between h-full bg-green-50 border-[#25D366] ring-1 ring-[#25D366]`;
-                    nameEl.classList.add('text-[#008069]', 'font-bold');
-                    controlsEl.classList.remove('hidden');
-                    controlsEl.classList.add('flex');
-                    qtyEl.textContent = newQty;
-                } else {
-                    cardEl.className = `p-3 rounded-xl shadow-sm border card-transition cursor-pointer select-none flex flex-col justify-between h-full bg-white border-gray-200 hover:border-gray-300`;
-                    nameEl.classList.remove('text-[#008069]', 'font-bold');
-                    controlsEl.classList.add('hidden');
-                    controlsEl.classList.remove('flex');
-                }
-            }
+            // Actualizar vista. Si tenemos groupIndex, podemos intentar ser específicos,
+            // pero dado que el cambio de cantidad puede afectar el estilo de la carta (borde verde/blanco)
+            // y el DOM ID depende del grupo, lo más simple es refrescar la lista si hay filtro,
+            // o manipular el DOM directamente si es posible.
+            // Para simplicidad y robustez con el nuevo sistema de grupos:
+            renderList(document.getElementById('searchInput').value);
 
             const cartModal = document.getElementById('cartModal');
             if (!cartModal.classList.contains('translate-y-full')) {
@@ -827,6 +860,52 @@
             }
         }
 
+        // ... Resto de funciones (Toggle Cart, Render Cart, Copy, Share, etc.) IGUAL QUE ANTES ...
+
+        function toggleCartView() {
+            const modal = document.getElementById('cartModal');
+            const isClosed = modal.classList.contains('translate-y-full');
+            if (isClosed) { renderCartView(); modal.classList.remove('translate-y-full'); } 
+            else { modal.classList.add('translate-y-full'); }
+        }
+
+        function renderCartView() {
+            const container = document.getElementById('cartListContainer');
+            container.innerHTML = '';
+            const cartEntries = Object.entries(state.cart);
+            if (cartEntries.length === 0) {
+                container.innerHTML = `<div class="col-span-full flex flex-col items-center justify-center h-64 text-gray-400"><i class="ph ph-shopping-cart text-6xl mb-4 text-gray-300"></i><p class="text-lg">Tu carrito está vacío</p></div>`;
+                return;
+            }
+            cartEntries.forEach(([id, qty]) => {
+                const p = state.products.find(prod => prod.id == id);
+                if (!p) return;
+                const subtotal = p.price * qty;
+                const presText = p.presentation ? `<span class="inline-block mt-1 bg-gray-100 text-gray-500 text-[10px] font-semibold px-2 py-0.5 rounded border border-gray-200 uppercase tracking-wide">${p.presentation}</span>` : '';
+                const el = document.createElement('div');
+                el.className = "p-3 rounded-xl shadow-sm border border-gray-200 bg-white flex flex-col justify-between h-full";
+                el.innerHTML = `
+                    <div class="flex-1 w-full flex flex-col items-start">
+                        <h4 class="font-medium text-gray-800 text-sm leading-snug w-full line-clamp-2">${p.name}</h4>
+                        ${presText}
+                        <div class="mt-2 w-full">
+                            <p class="text-[#008069] font-bold text-base">${formatMoney(p.price)}</p>
+                            <p class="text-xs text-gray-400 mt-0.5">Total: ${formatMoney(subtotal)}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between w-full mt-3 bg-gray-50 rounded-lg p-1 gap-2">
+                        <button class="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-white border border-gray-200 shadow-sm rounded-lg text-gray-600 active:bg-gray-100" onclick="updateQty(${p.id}, -1)">
+                            <i class="ph ${qty === 1 ? 'ph-trash text-red-500' : 'ph-minus'} font-bold text-xs"></i>
+                        </button>
+                        <span class="flex-1 text-center font-bold text-base min-w-[20px]">${qty}</span>
+                        <button class="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-[#25D366] text-white shadow-sm rounded-lg active:bg-[#1da851]" onclick="updateQty(${p.id}, 1)">
+                            <i class="ph ph-plus font-bold text-xs"></i>
+                        </button>
+                    </div>`;
+                container.appendChild(el);
+            });
+        }
+
         function clearInput() {
             const input = document.getElementById('searchInput');
             input.value = '';
@@ -838,17 +917,12 @@
         function setupSearch() {
             const input = document.getElementById('searchInput');
             const clearBtn = document.getElementById('clearSearch');
-
             let timeout = null;
             input.addEventListener('input', (e) => {
                 const val = e.target.value;
-                if (val) clearBtn.classList.remove('hidden');
-                else clearBtn.classList.add('hidden');
-                
+                if (val) clearBtn.classList.remove('hidden'); else clearBtn.classList.add('hidden');
                 clearTimeout(timeout);
-                timeout = setTimeout(() => {
-                    renderList(val);
-                }, 50);
+                timeout = setTimeout(() => { renderList(val); }, 50);
             });
         }
 
@@ -857,33 +931,18 @@
             const countEl = document.getElementById('itemCount');
             const totalEl = document.getElementById('totalAmount');
             const cartTotalEl = document.getElementById('cartModalTotal');
-            
             const cartEntries = Object.entries(state.cart);
-            
-            if (cartEntries.length === 0) {
-                footer.classList.add('translate-y-full');
-                return;
-            }
-
+            if (cartEntries.length === 0) { footer.classList.add('translate-y-full'); return; }
             footer.classList.remove('translate-y-full');
-
-            let totalItems = 0;
-            let totalMoney = 0;
-
+            let totalItems = 0; let totalMoney = 0;
             cartEntries.forEach(([id, qty]) => {
                 const product = state.products.find(p => p.id == id);
-                if (product) {
-                    totalItems += qty;
-                    totalMoney += (product.price * qty);
-                }
+                if (product) { totalItems += qty; totalMoney += (product.price * qty); }
             });
-
             const textCount = `${totalItems} ${totalItems === 1 ? 'ítem' : 'ítems'}`;
             const textMoney = formatMoney(totalMoney);
-
             countEl.textContent = textCount;
             totalEl.textContent = textMoney;
-            
             if (cartTotalEl) cartTotalEl.textContent = textMoney;
         }
 
@@ -923,40 +982,24 @@
             window.open(url, '_blank');
         }
 
-        // --- FUNCIONES DE GUARDADO DE PRESUPUESTOS ---
-
         function toggleSavedModal() {
             const modal = document.getElementById('savedModal');
             modal.classList.toggle('hidden');
-            if (!modal.classList.contains('hidden')) {
-                renderSavedBudgets();
-            }
+            if (!modal.classList.contains('hidden')) { renderSavedBudgets(); }
         }
 
         function saveCurrentBudget() {
-            if (Object.keys(state.cart).length === 0) {
-                return showToast("El carrito está vacío");
-            }
-
+            if (Object.keys(state.cart).length === 0) { return showToast("El carrito está vacío"); }
             const clientName = prompt("Ingrese referencia o nombre del cliente:");
             if (!clientName) return;
-
             let total = 0;
             Object.entries(state.cart).forEach(([id, qty]) => {
                 const p = state.products.find(x => x.id == id);
                 if(p) total += (p.price * qty);
             });
-
             const text = generateBudgetText();
-            const newBudget = {
-                id: Date.now(),
-                name: clientName,
-                date: new Date().toLocaleString(),
-                total: total,
-                text: text
-            };
-
-            state.saved.unshift(newBudget); // Agregar al principio
+            const newBudget = { id: Date.now(), name: clientName, date: new Date().toLocaleString(), total: total, text: text };
+            state.saved.unshift(newBudget);
             saveSavedBudgets();
             showToast("Presupuesto guardado");
         }
@@ -964,69 +1007,34 @@
         function toggleBudgetDetail(id) {
             const detail = document.getElementById(`details-${id}`);
             const icon = document.getElementById(`icon-${id}`);
-            
-            if (detail.classList.contains('hidden')) {
-                detail.classList.remove('hidden');
-                icon.classList.add('rotate-180');
-            } else {
-                detail.classList.add('hidden');
-                icon.classList.remove('rotate-180');
-            }
+            if (detail.classList.contains('hidden')) { detail.classList.remove('hidden'); icon.classList.add('rotate-180'); } 
+            else { detail.classList.add('hidden'); icon.classList.remove('rotate-180'); }
         }
 
         function renderSavedBudgets() {
             const container = document.getElementById('savedListContainer');
             container.innerHTML = '';
-
             if (state.saved.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center text-gray-400 mt-10">
-                        <i class="ph ph-files text-4xl mb-2"></i>
-                        <p>No tienes presupuestos guardados.</p>
-                    </div>
-                `;
+                container.innerHTML = `<div class="text-center text-gray-400 mt-10"><i class="ph ph-files text-4xl mb-2"></i><p>No tienes presupuestos guardados.</p></div>`;
                 return;
             }
-
             state.saved.forEach(budget => {
                 const el = document.createElement('div');
-                el.className = "bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-3"; // overflow-hidden para la animación suave
-                
+                el.className = "bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-3";
                 const displayName = budget.name || "Sin nombre";
-
                 el.innerHTML = `
-                    <!-- Header (Clickable) -->
                     <div onclick="toggleBudgetDetail(${budget.id})" class="p-3 flex justify-between items-center cursor-pointer bg-gray-50/50 hover:bg-gray-100 transition select-none">
-                        <div>
-                             <h4 class="font-bold text-gray-800 text-sm">${displayName}</h4>
-                             <span class="text-[10px] text-gray-500 font-medium">${budget.date}</span>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <span class="font-bold text-[#008069] text-sm">${formatMoney(budget.total)}</span>
-                            <i id="icon-${budget.id}" class="ph ph-caret-down text-gray-400 transition-transform duration-300 text-lg"></i>
-                        </div>
+                        <div><h4 class="font-bold text-gray-800 text-sm">${displayName}</h4><span class="text-[10px] text-gray-500 font-medium">${budget.date}</span></div>
+                        <div class="flex items-center gap-3"><span class="font-bold text-[#008069] text-sm">${formatMoney(budget.total)}</span><i id="icon-${budget.id}" class="ph ph-caret-down text-gray-400 transition-transform duration-300 text-lg"></i></div>
                     </div>
-
-                    <!-- Details (Hidden by default) -->
                     <div id="details-${budget.id}" class="hidden border-t border-gray-100 bg-white">
-                        <div class="p-3 text-xs text-gray-600 font-mono whitespace-pre-wrap bg-gray-50 m-2 rounded border border-gray-100 leading-relaxed">
-${budget.text}
-                        </div>
-                        
-                        <!-- Actions Footer -->
+                        <div class="p-3 text-xs text-gray-600 font-mono whitespace-pre-wrap bg-gray-50 m-2 rounded border border-gray-100 leading-relaxed">${budget.text}</div>
                         <div class="flex gap-2 p-2 justify-end bg-white border-t border-gray-50">
-                            <button onclick="deleteSavedBudget(${budget.id})" class="p-2 text-red-500 bg-red-50 rounded hover:bg-red-100 transition" title="Eliminar">
-                                <i class="ph ph-trash text-lg"></i>
-                            </button>
-                             <button onclick="shareSavedText('${encodeURIComponent(budget.text)}')" class="px-3 py-2 text-[#25D366] bg-green-50 rounded hover:bg-green-100 flex gap-1 items-center font-bold text-xs transition">
-                                <i class="ph ph-whatsapp-logo text-lg"></i> WhatsApp
-                            </button>
-                            <button onclick="copySavedText('${encodeURIComponent(budget.text)}')" class="px-3 py-2 text-gray-600 bg-gray-100 rounded hover:bg-gray-200 flex gap-1 items-center font-bold text-xs transition">
-                                <i class="ph ph-copy text-lg"></i> Copiar
-                            </button>
+                            <button onclick="deleteSavedBudget(${budget.id})" class="p-2 text-red-500 bg-red-50 rounded hover:bg-red-100 transition"><i class="ph ph-trash text-lg"></i></button>
+                             <button onclick="shareSavedText('${encodeURIComponent(budget.text)}')" class="px-3 py-2 text-[#25D366] bg-green-50 rounded hover:bg-green-100 flex gap-1 items-center font-bold text-xs transition"><i class="ph ph-whatsapp-logo text-lg"></i> WhatsApp</button>
+                            <button onclick="copySavedText('${encodeURIComponent(budget.text)}')" class="px-3 py-2 text-gray-600 bg-gray-100 rounded hover:bg-gray-200 flex gap-1 items-center font-bold text-xs transition"><i class="ph ph-copy text-lg"></i> Copiar</button>
                         </div>
-                    </div>
-                `;
+                    </div>`;
                 container.appendChild(el);
             });
         }
@@ -1039,74 +1047,34 @@ ${budget.text}
             }
         }
 
-        window.shareSavedText = (encodedText) => {
-            const text = decodeURIComponent(encodedText);
-            const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-            window.open(url, '_blank');
-        };
-
-        window.copySavedText = (encodedText) => {
-            const text = decodeURIComponent(encodedText);
-            copyTextToClipboard(text, "Presupuesto copiado");
-        };
-
+        window.shareSavedText = (encodedText) => { const text = decodeURIComponent(encodedText); window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank'); };
+        window.copySavedText = (encodedText) => { const text = decodeURIComponent(encodedText); copyTextToClipboard(text, "Presupuesto copiado"); };
 
         function copyTextToClipboard(text, successMsg) {
             const textArea = document.createElement("textarea");
             textArea.value = text;
-            textArea.style.position = "fixed";
-            textArea.style.left = "-9999px";
-            textArea.style.top = "0";
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            try {
-                const successful = document.execCommand('copy');
-                if (successful) showToast(successMsg);
-                else showToast("No se pudo copiar automáticamente");
-            } catch (err) {
-                console.error('Error al copiar', err);
-                showToast("Error al intentar copiar");
-            }
+            textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0";
+            document.body.appendChild(textArea); textArea.focus(); textArea.select();
+            try { if (document.execCommand('copy')) showToast(successMsg); else showToast("No se pudo copiar automáticamente"); } 
+            catch (err) { console.error('Error', err); showToast("Error al intentar copiar"); }
             document.body.removeChild(textArea);
         }
 
-        function toggleConfig() {
-            const modal = document.getElementById('configModal');
-            modal.classList.toggle('hidden');
-        }
-
+        function toggleConfig() { document.getElementById('configModal').classList.toggle('hidden'); }
+        
         function showToast(msg) {
             const toast = document.getElementById('toast');
-            const msgEl = document.getElementById('toastMsg');
-            msgEl.textContent = msg;
+            document.getElementById('toastMsg').textContent = msg;
             toast.classList.add('show');
             if (window.toastTimeout) clearTimeout(window.toastTimeout);
-            window.toastTimeout = setTimeout(() => {
-                toast.classList.remove('show');
-            }, 2500);
+            window.toastTimeout = setTimeout(() => { toast.classList.remove('show'); }, 2500);
         }
 
         function clearData() {
             if(confirm('¿Borrar caché y reiniciar configuración?')) {
-                localStorage.removeItem('app_config');
-                localStorage.removeItem('app_products');
-                localStorage.removeItem('tutorial_seen');
-                localStorage.removeItem('app_saved_budgets'); // También borrar presupuestos? No, mejor no por defecto, o sí si es clear all. El usuario pidió borrar caché.
-                // Mejor no borrar los guardados a menos que sea explícito, pero la función dice "Borrar caché y reiniciar".
-                // Dejemos los guardados seguros.
-                
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                        for(let registration of registrations) {
-                            registration.unregister();
-                        }
-                    });
-                }
-                
-                if (URL_FIJA_CSV) {
-                    alert("Se han borrado los datos locales. La App se reiniciará con la URL fija del código.");
-                }
+                localStorage.removeItem('app_config'); localStorage.removeItem('app_products'); localStorage.removeItem('tutorial_seen');
+                if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function(regs) { for(let reg of regs) { reg.unregister(); } }); }
+                if (URL_FIJA_CSV) { alert("Se han borrado los datos locales. La App se reiniciará con la URL fija del código."); }
                 location.reload();
             }
         }
