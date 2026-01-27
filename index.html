@@ -40,7 +40,6 @@
     <script>
         (function() {
             // 1. Icono Base64 (SVG minimalista verde)
-            // Hemos simplificado el SVG para asegurar compatibilidad
             const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#008069"/><path d="M386 166c-13-13-33-16-56-11l-35 8c-63 15-119 71-134 134l-8 35c-5 23-2 43 11 56 16 16 43 16 71-11l9-8c4-4 10-4 14 0l46 46c4 4 4 10 0 14l-8 9c-27 28-27 55-11 71 21 21 68 12 101-20l46-46c33-33 42-80 21-101-16-16-43-16-71 11l-9 8c-4 4-10 4-14 0l-46-46c-4-4-4-10 0-14l8-9c27-28 27-55 11-71z" fill="white" opacity="0.3"/><path d="M256 64C150 64 64 150 64 256s86 192 192 192 192-86 192-192S362 64 256 64zm0 336c-79.5 0-144-64.5-144-144S176.5 112 256 112s144 64.5 144 144-64.5 144-144 144zm-16-224h-32v96h-64v32h64v64h32v-64h64v-32h-64v-96z" fill="white"/></svg>`;
             const iconUrl = "data:image/svg+xml;base64," + btoa(iconSvg);
 
@@ -58,10 +57,10 @@
 
             // 4. Construir y Linkear Manifiesto ROBUSTO para Android
             const manifest = {
-                "id": "/presupuestador-app-v1", // ID único requerido
+                "id": "/presupuestador-app-v1.3", // ID actualizado
                 "name": "Presupuestador Rápido",
                 "short_name": "Presupuestos",
-                "start_url": "./index.html", // Start URL explícita
+                "start_url": "./index.html",
                 "display": "standalone",
                 "background_color": "#ffffff",
                 "theme_color": "#008069",
@@ -78,7 +77,7 @@
                         "src": iconUrl,
                         "sizes": "512x512",
                         "type": "image/svg+xml",
-                        "purpose": "maskable" // CRUCIAL para Android App Drawer
+                        "purpose": "maskable"
                     }
                 ]
             };
@@ -235,10 +234,12 @@
                     </button>
                 </div>
                 
-                <div class="border-t pt-4">
+                <div class="border-t pt-4 flex flex-col gap-2">
                      <button onclick="clearData()" class="w-full text-red-500 text-sm py-2 hover:bg-red-50 rounded">
                         Borrar caché y reiniciar
                     </button>
+                    <!-- CAMBIO: Version visual para que sepas si estás en la app vieja o nueva -->
+                    <span class="text-center text-[10px] text-gray-400">Versión App: <span id="appVersionDisplay">Cargando...</span></span>
                 </div>
             </div>
         </div>
@@ -279,6 +280,8 @@
         // ==========================================
         //  CONFIGURACIÓN FIJA (OPCIONAL)
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
+        // CAMBIO: Versión para verificar actualización
+        const APP_VERSION = "v1.3 (Workflow Focus)";
         // ==========================================
 
         // --- HELPER OPTIMIZADO PARA TEXTO ---
@@ -289,7 +292,7 @@
 
         // --- ESTADO DE LA APLICACIÓN ---
         const state = {
-            products: [],   // { id, name, price, priceRaw, presentation, searchString }
+            products: [],   // { id, name, price, priceRaw, presentation, searchString, lastUpdate }
             cart: {},       // { id: qty }
             config: {
                 url: '',
@@ -423,6 +426,9 @@
             renderList();
             checkStaleData();
             
+            // Mostrar versión
+            document.getElementById('appVersionDisplay').textContent = APP_VERSION;
+
             // Check Tutorial
             if (!localStorage.getItem('tutorial_seen')) {
                 // Pequeño delay para que cargue la UI primero
@@ -510,7 +516,11 @@
             btn.classList.add('animate-spin');
 
             try {
-                const response = await fetch(url);
+                // CAMBIO: Cache Busting para el CSV (Forzar nueva versión)
+                // Se agrega un parámetro ?t=timestamp al final para que el navegador crea que es un archivo nuevo
+                const cacheBusterUrl = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+                const response = await fetch(cacheBusterUrl);
+                
                 if (!response.ok) throw new Error("Error de red");
                 const text = await response.text();
                 
@@ -562,6 +572,10 @@
                     const priceStr = cols[1];
                     let presentation = '';
                     if (cols.length >= 3) presentation = cols[2];
+
+                    // NUEVO: Columna de fecha de actualización (índice 3)
+                    let lastUpdate = '';
+                    if (cols.length >= 4) lastUpdate = cols[3];
                     
                     const price = parseLocaleNumber(priceStr);
 
@@ -573,6 +587,7 @@
                             price: price,
                             priceRaw: priceStr,
                             presentation: presentation,
+                            lastUpdate: lastUpdate, // Guardamos la fecha
                             searchString: searchString
                         });
                     }
@@ -650,12 +665,20 @@
                 const presentationBadge = p.presentation 
                     ? `<span class="inline-block mt-1 bg-gray-100 text-gray-500 text-[10px] font-semibold px-2 py-0.5 rounded border border-gray-200 uppercase tracking-wide">${p.presentation}</span>` 
                     : '';
+                
+                // NUEVO: Mostrar fecha si existe
+                const dateText = p.lastUpdate
+                    ? `<span class="text-[10px] text-gray-400 mt-0.5 block">Act: ${p.lastUpdate}</span>`
+                    : '';
 
                 el.innerHTML = `
                     <div class="flex-1 w-full flex flex-col items-start">
                         <h3 id="name-${p.id}" class="font-medium text-gray-800 text-sm leading-snug w-full line-clamp-2 ${isSelected ? 'text-[#008069] font-bold' : ''}">${p.name}</h3>
                         ${presentationBadge}
-                        <p class="text-[#008069] font-bold mt-2 text-base">${formattedPrice}</p>
+                        <div class="mt-2 w-full">
+                            <p class="text-[#008069] font-bold text-base leading-none">${formattedPrice}</p>
+                            ${dateText}
+                        </div>
                     </div>
                     
                     <div id="controls-${p.id}" class="${isSelected ? 'flex' : 'hidden'} items-center justify-between w-full mt-3 bg-white/50 rounded-lg p-1 gap-2" onclick="event.stopPropagation()">
@@ -712,6 +735,9 @@
 
                 const subtotal = p.price * qty;
                 const presText = p.presentation ? `<span class="inline-block mt-1 bg-gray-100 text-gray-500 text-[10px] font-semibold px-2 py-0.5 rounded border border-gray-200 uppercase tracking-wide">${p.presentation}</span>` : '';
+                
+                // Mostrar fecha también en carrito si se desea, por ahora mantenemos limpio
+                // const dateText = p.lastUpdate ? `<span class="text-[10px] text-gray-400">Act: ${p.lastUpdate}</span>` : '';
 
                 const el = document.createElement('div');
                 el.className = "p-3 rounded-xl shadow-sm border border-gray-200 bg-white flex flex-col justify-between h-full";
@@ -749,6 +775,14 @@
         function handleCardClick(e, id) {
             if (!state.cart[id]) {
                 updateQty(id, 1);
+
+                // MEJORA WORKFLOW: Focus automático al buscador
+                const input = document.getElementById('searchInput');
+                // Usamos un pequeño timeout para no cortar la animación de click
+                setTimeout(() => {
+                    input.focus();
+                    input.select(); // Selecciona el texto actual para facilitar nueva búsqueda
+                }, 50);
             }
         }
 
@@ -938,9 +972,20 @@
 
         function clearData() {
             if(confirm('¿Borrar caché y reiniciar configuración?')) {
+                // Borrar LocalStorage
                 localStorage.removeItem('app_config');
                 localStorage.removeItem('app_products');
-                localStorage.removeItem('tutorial_seen'); // También reseteamos el tutorial
+                localStorage.removeItem('tutorial_seen');
+                
+                // CAMBIO: Desregistrar Service Workers viejos
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                        for(let registration of registrations) {
+                            registration.unregister();
+                        }
+                    });
+                }
+                
                 if (URL_FIJA_CSV) {
                     alert("Se han borrado los datos locales. La App se reiniciará con la URL fija del código.");
                 }
