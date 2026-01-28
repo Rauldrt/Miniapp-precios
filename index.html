@@ -80,7 +80,7 @@
 
             // 4. Construir y Linkear Manifiesto ROBUSTO para Android
             const manifest = {
-                "id": "/presupuestador-app-v1.7", // ID actualizado
+                "id": "/presupuestador-app-v1.9", // ID actualizado
                 "name": "Presupuestador Rápido",
                 "short_name": "Presupuestos",
                 "start_url": "./index.html",
@@ -242,6 +242,19 @@
                 </h2>
                 <button onclick="toggleSavedModal()" class="p-1"><i class="ph ph-x text-xl"></i></button>
             </div>
+            
+            <!-- Barra de búsqueda y Filtro de Fecha -->
+            <div class="p-3 bg-white border-b border-gray-100 shrink-0 flex gap-2">
+                <div class="relative flex-1">
+                    <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" id="savedSearchInput" placeholder="Buscar cliente..." 
+                           class="w-full pl-9 pr-3 py-2 bg-gray-100 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[#008069]"
+                           oninput="applySavedFilters()">
+                </div>
+                <!-- Input de Fecha -->
+                <input type="date" id="savedDateInput" class="bg-gray-100 rounded-lg text-sm px-2 focus:outline-none focus:ring-1 focus:ring-[#008069] text-gray-600 w-auto" onchange="applySavedFilters()">
+            </div>
+
             <div id="savedListContainer" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
                 <!-- Se llena via JS -->
                 <div class="text-center text-gray-400 mt-10">
@@ -335,7 +348,7 @@
         // ==========================================
         //  CONFIGURACIÓN FIJA
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
-        const APP_VERSION = "v1.7 (Agrupado)";
+        const APP_VERSION = "v1.9 (Filtro Fecha)";
         // ==========================================
 
         const normalize = (str) => {
@@ -415,7 +428,7 @@
             {
                 icon: "ph-floppy-disk",
                 title: "Guardar Historial",
-                text: "Puedes guardar presupuestos con nombre de cliente y consultarlos más tarde en la carpeta de archivados 📂."
+                text: "Guarda tus presupuestos. Ahora puedes <b>filtrar por nombre y fecha</b> en la carpeta 📂."
             },
             {
                 icon: "ph-gear",
@@ -985,7 +998,15 @@
         function toggleSavedModal() {
             const modal = document.getElementById('savedModal');
             modal.classList.toggle('hidden');
-            if (!modal.classList.contains('hidden')) { renderSavedBudgets(); }
+            if (!modal.classList.contains('hidden')) { 
+                // Reset search when opening
+                const input = document.getElementById('savedSearchInput');
+                if(input) input.value = '';
+                const dateInput = document.getElementById('savedDateInput');
+                if(dateInput) dateInput.value = '';
+                
+                renderSavedBudgets(); 
+            }
         }
 
         function saveCurrentBudget() {
@@ -998,6 +1019,7 @@
                 if(p) total += (p.price * qty);
             });
             const text = generateBudgetText();
+            // Guardamos el ID como timestamp, que usaremos para filtrar fecha
             const newBudget = { id: Date.now(), name: clientName, date: new Date().toLocaleString(), total: total, text: text };
             state.saved.unshift(newBudget);
             saveSavedBudgets();
@@ -1011,14 +1033,45 @@
             else { detail.classList.add('hidden'); icon.classList.remove('rotate-180'); }
         }
 
-        function renderSavedBudgets() {
+        function applySavedFilters() {
+            const name = document.getElementById('savedSearchInput').value;
+            const date = document.getElementById('savedDateInput').value;
+            renderSavedBudgets(name, date);
+        }
+
+        function renderSavedBudgets(nameFilter = '', dateFilter = '') {
             const container = document.getElementById('savedListContainer');
             container.innerHTML = '';
-            if (state.saved.length === 0) {
-                container.innerHTML = `<div class="text-center text-gray-400 mt-10"><i class="ph ph-files text-4xl mb-2"></i><p>No tienes presupuestos guardados.</p></div>`;
+            
+            let filtered = state.saved;
+            const term = normalize(nameFilter);
+
+            filtered = state.saved.filter(b => {
+                // Name Filter
+                const matchesName = !term || normalize(b.name).includes(term) || b.date.includes(nameFilter);
+                
+                // Date Filter
+                let matchesDate = true;
+                if (dateFilter) {
+                    const d = new Date(b.id);
+                    // Local YYYY-MM-DD building manually to ensure local match
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const budgetIso = `${year}-${month}-${day}`;
+                    matchesDate = (budgetIso === dateFilter);
+                }
+                
+                return matchesName && matchesDate;
+            });
+
+            if (filtered.length === 0) {
+                const msg = (nameFilter || dateFilter) ? "No se encontraron coincidencias." : "No tienes presupuestos guardados.";
+                container.innerHTML = `<div class="text-center text-gray-400 mt-10"><i class="ph ph-files text-4xl mb-2"></i><p>${msg}</p></div>`;
                 return;
             }
-            state.saved.forEach(budget => {
+
+            filtered.forEach(budget => {
                 const el = document.createElement('div');
                 el.className = "bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-3";
                 const displayName = budget.name || "Sin nombre";
@@ -1043,7 +1096,8 @@
             if(confirm("¿Eliminar este presupuesto?")) {
                 state.saved = state.saved.filter(b => b.id !== id);
                 saveSavedBudgets();
-                renderSavedBudgets();
+                // Re-apply filters
+                applySavedFilters();
             }
         }
 
