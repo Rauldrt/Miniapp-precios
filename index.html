@@ -80,7 +80,7 @@
 
             // 4. Construir y Linkear Manifiesto ROBUSTO para Android
             const manifest = {
-                "id": "/presupuestador-app-v2.6", // ID actualizado
+                "id": "/presupuestador-app-v2.8", // ID actualizado
                 "name": "Presupuestador Rápido",
                 "short_name": "Presupuestos",
                 "start_url": "./index.html",
@@ -351,7 +351,7 @@
         // ==========================================
         //  CONFIGURACIÓN FIJA
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
-        const APP_VERSION = "v2.6 (SW Error Fix)";
+        const APP_VERSION = "v2.8 (No Pres)";
         // ==========================================
 
         const normalize = (str) => {
@@ -974,8 +974,12 @@
             const product = state.products.find(p => p.id == id);
             if (!product) return;
             const total = product.price * qty;
-            const presText = product.presentation ? ` (${product.presentation})` : '';
-            const text = `${qty} x ${product.name}${presText}: ${formatMoney(total)}`;
+            
+            // Nuevo formato: [ID] Nombre - Presentación
+            const codeStr = product.code ? `[${product.code}] ` : '';
+            // const presText = product.presentation ? ` - ${product.presentation}` : '';
+            
+            const text = `${qty} x ${codeStr}${product.name}: ${formatMoney(total)}`;
             copyTextToClipboard(text, "Copiado: " + text);
         }
 
@@ -987,8 +991,12 @@
                 if (product) {
                     const subtotal = product.price * qty;
                     grandTotal += subtotal;
-                    const presText = product.presentation ? ` (${product.presentation})` : '';
-                    text += `▪️ ${qty} x ${product.name}${presText}: ${formatMoney(subtotal)}\n`;
+                    
+                    // Nuevo formato: [ID] Nombre - Presentación
+                    const codeStr = product.code ? `[${product.code}] ` : '';
+                    // const presText = product.presentation ? ` - ${product.presentation}` : '';
+                    
+                    text += `▪️ ${qty} x ${codeStr}${product.name}: ${formatMoney(subtotal)}\n`;
                 }
             });
             text += `\n*TOTAL: ${formatMoney(grandTotal)}*`;
