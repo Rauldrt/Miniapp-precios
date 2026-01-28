@@ -80,7 +80,7 @@
 
             // 4. Construir y Linkear Manifiesto ROBUSTO para Android
             const manifest = {
-                "id": "/presupuestador-app-v1.9", // ID actualizado
+                "id": "/presupuestador-app-v2.6", // ID actualizado
                 "name": "Presupuestador Rápido",
                 "short_name": "Presupuestos",
                 "start_url": "./index.html",
@@ -147,7 +147,7 @@
     <div class="bg-white p-3 shadow-sm z-10 shrink-0">
         <div class="max-w-7xl mx-auto relative">
             <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg"></i>
-            <input type="text" id="searchInput" placeholder="Buscar producto..." 
+            <input type="text" id="searchInput" placeholder="Buscar producto o código..." 
                    class="w-full pl-10 pr-10 py-3 bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#008069] text-base"
                    autocomplete="off">
             <button id="clearSearch" class="hidden absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 p-1" onclick="clearInput()">
@@ -235,7 +235,7 @@
 
     <!-- 8. SAVED BUDGETS MODAL -->
     <div id="savedModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white w-11/12 max-w-md h-[80vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <div class="bg-white w-full h-full md:w-11/12 md:max-w-4xl md:h-[90vh] md:rounded-xl shadow-2xl overflow-hidden flex flex-col transition-all">
             <div class="bg-[#008069] text-white p-4 flex justify-between items-center shrink-0">
                 <h2 class="font-bold flex items-center gap-2">
                     <i class="ph ph-folder-open text-xl"></i> Presupuestos Guardados
@@ -266,13 +266,14 @@
     </div>
 
     <!-- 5. CONFIG MODAL (Con Botón de Instalar PWA) -->
-    <div id="configModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white w-11/12 max-w-md rounded-xl shadow-2xl overflow-hidden">
-            <div class="bg-[#008069] text-white p-4 flex justify-between items-center">
+    <!-- FIX: Z-Index aumentado a 60 para estar por encima de otros modales y asegurar clicabilidad -->
+    <div id="configModal" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-[#008069] text-white p-4 flex justify-between items-center shrink-0">
                 <h2 class="font-bold">Configuración</h2>
                 <button onclick="toggleConfig()" class="p-1"><i class="ph ph-x text-xl"></i></button>
             </div>
-            <div class="p-6 space-y-4">
+            <div class="p-6 space-y-4 overflow-y-auto">
                 
                 <div id="installContainer" class="hidden mb-4 p-3 bg-green-50 rounded-lg border border-green-200 shadow-sm">
                 </div>
@@ -290,10 +291,11 @@
                         <i class="ph ph-info text-sm"></i> Estructura del CSV:
                     </p>
                     <ul class="list-none space-y-1 ml-1">
-                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col A</b> Nombre del producto <span class="text-blue-600">(Obligatorio)</span></li>
-                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col B</b> Precio <span class="text-blue-600">(Obligatorio, solo nros)</span></li>
-                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col C</b> Presentación <span class="text-gray-500">(Ej: "x kg")</span></li>
-                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col D</b> Fecha Act. <span class="text-gray-500">(Ej: "12/05")</span></li>
+                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col A</b> ID / Código <span class="text-blue-600">(Visible en Tarjeta)</span></li>
+                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col B</b> Nombre <span class="text-blue-600">(Obligatorio)</span></li>
+                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col C</b> Precio <span class="text-blue-600">(Obligatorio)</span></li>
+                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col D</b> Presentación</li>
+                        <li><b class="bg-blue-200 px-1 rounded text-[10px]">Col E</b> Fecha Act.</li>
                     </ul>
                 </div>
                 
@@ -309,7 +311,8 @@
                 </div>
                 
                 <div class="border-t pt-4 flex flex-col gap-2">
-                     <button onclick="clearData()" class="w-full text-red-500 text-sm py-2 hover:bg-red-50 rounded">
+                     <!-- FIX: Onclick actualizado para nueva lógica de doble toque -->
+                     <button id="btnClearData" onclick="clearData(event)" class="w-full text-red-500 text-sm py-2 hover:bg-red-50 rounded font-medium transition-colors select-none">
                         Borrar caché y reiniciar
                     </button>
                     <span class="text-center text-[10px] text-gray-400">Versión App: <span id="appVersionDisplay">Cargando...</span></span>
@@ -348,7 +351,7 @@
         // ==========================================
         //  CONFIGURACIÓN FIJA
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
-        const APP_VERSION = "v1.9 (Filtro Fecha)";
+        const APP_VERSION = "v2.6 (SW Error Fix)";
         // ==========================================
 
         const normalize = (str) => {
@@ -357,7 +360,7 @@
         };
 
         const state = {
-            products: [],   // { id, name, price, presentation, searchString, lastUpdate }
+            products: [],   // { id, code, name, price, presentation, searchString, lastUpdate }
             groups: [],     // { groupIndex, name, ids: [id1, id2], activeIndex, searchString }
             cart: {},       // { id: qty }
             saved: [],      // { id, name, date, total, text }
@@ -418,7 +421,7 @@
             {
                 icon: "ph-magnifying-glass",
                 title: "Búsqueda Inteligente",
-                text: "Encuentra productos por nombre, marca o tipo. <br><b>No importa el orden de las palabras</b>."
+                text: "Encuentra productos por nombre, código o marca. <br><b>No importa el orden de las palabras</b>."
             },
             {
                 icon: "ph-stack",
@@ -629,21 +632,23 @@
                     return col.trim().replace(/^"|"$/g, '').replace(/""/g, '"');
                 });
                 
-                if (cols.length >= 2) {
-                    const name = cols[0];
-                    const priceStr = cols[1];
+                if (cols.length >= 3) {
+                    const code = cols[0]; // ID / Código
+                    const name = cols[1]; 
+                    const priceStr = cols[2];
                     let presentation = '';
-                    if (cols.length >= 3) presentation = cols[2];
+                    if (cols.length >= 4) presentation = cols[3];
 
                     let lastUpdate = '';
-                    if (cols.length >= 4) lastUpdate = cols[3];
+                    if (cols.length >= 5) lastUpdate = cols[4];
                     
                     const price = parseLocaleNumber(priceStr);
 
                     if (name && !isNaN(price) && price > 0) {
-                        const searchString = normalize(name + ' ' + presentation);
+                        const searchString = normalize(code + ' ' + name + ' ' + presentation);
                         products.push({
                             id: index,
+                            code: code,
                             name: name,
                             price: price,
                             priceRaw: priceStr,
@@ -762,6 +767,9 @@
                 const dateText = p.lastUpdate
                     ? `<span class="text-[10px] text-gray-400 mt-0.5 block">Act: ${p.lastUpdate}</span>`
                     : '';
+                
+                // Código/ID Display
+                const codeHtml = p.code ? `<span class="text-[10px] font-mono text-gray-400 mb-0.5 block tracking-wider">${p.code}</span>` : '';
 
                 // Variant Toggle HTML
                 let variantsHtml = '';
@@ -786,6 +794,7 @@
 
                 el.innerHTML = `
                     <div class="flex-1 w-full flex flex-col items-start">
+                        ${codeHtml}
                         <h3 class="font-medium text-gray-800 text-sm leading-snug w-full line-clamp-2 ${isSelected ? 'text-[#008069] font-bold' : ''}">${p.name}</h3>
                         ${variantsHtml ? '' : presentationBadge} 
                         
@@ -956,6 +965,8 @@
             const textMoney = formatMoney(totalMoney);
             countEl.textContent = textCount;
             totalEl.textContent = textMoney;
+            countEl.textContent = textCount;
+            totalEl.textContent = textMoney;
             if (cartTotalEl) cartTotalEl.textContent = textMoney;
         }
 
@@ -1124,13 +1135,79 @@
             window.toastTimeout = setTimeout(() => { toast.classList.remove('show'); }, 2500);
         }
 
-        function clearData() {
-            if(confirm('¿Borrar caché y reiniciar configuración?')) {
-                localStorage.removeItem('app_config'); localStorage.removeItem('app_products'); localStorage.removeItem('tutorial_seen');
-                if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function(regs) { for(let reg of regs) { reg.unregister(); } }); }
-                if (URL_FIJA_CSV) { alert("Se han borrado los datos locales. La App se reiniciará con la URL fija del código."); }
-                location.reload();
+        // --- NUEVA LÓGICA DE BORRADO DE DOBLE TOQUE (SIN CONFIRM) ---
+        let clearStep = 0;
+        
+        function clearData(e) {
+            if(e) e.preventDefault(); // Detener propagación
+            
+            const btn = document.getElementById('btnClearData');
+            
+            if (clearStep === 0) {
+                // Paso 1: Pedir confirmación visual
+                btn.textContent = "⚠️ ¿Seguro? Toca de nuevo para borrar";
+                btn.classList.remove('text-red-500', 'hover:bg-red-50');
+                btn.classList.add('bg-red-600', 'text-white', 'hover:bg-red-700');
+                clearStep = 1;
+                
+                // Resetear si no confirma en 3 segundos
+                setTimeout(() => {
+                    if(clearStep === 1) {
+                        resetClearButton();
+                    }
+                }, 3000);
+                return;
             }
+
+            // Paso 2: Ejecutar
+            if (clearStep === 1) {
+                performClear();
+            }
+        }
+
+        function resetClearButton() {
+            clearStep = 0;
+            const btn = document.getElementById('btnClearData');
+            if(btn) {
+                btn.textContent = "Borrar caché y reiniciar";
+                btn.className = "w-full text-red-500 text-sm py-2 hover:bg-red-50 rounded font-medium transition-colors select-none";
+            }
+        }
+
+        async function performClear() {
+            const btn = document.getElementById('btnClearData');
+            if(btn) {
+                btn.textContent = "Borrando...";
+                btn.disabled = true;
+            }
+
+            try {
+                // 1. Borrar Storage (Prioridad 1)
+                localStorage.clear(); 
+                sessionStorage.clear(); // Por si acaso
+                
+                // 2. Intentar desregistrar SW (Prioridad 2 - Best effort)
+                if ('serviceWorker' in navigator) {
+                    try {
+                        const registrations = await navigator.serviceWorker.getRegistrations();
+                        for(let registration of registrations) {
+                            await registration.unregister();
+                        }
+                    } catch(swError) { 
+                        // Silenciosamente ignorar errores de SW en entornos restringidos
+                        console.warn("No se pudo limpiar el Service Worker (posible entorno restringido):", swError.message); 
+                    }
+                }
+            } catch (e) {
+                console.error("Error general al borrar:", e);
+            }
+
+            // 3. Feedback y Recarga
+            showToast("Datos borrados. Reiniciando...");
+            
+            setTimeout(() => {
+                window.location.reload(); 
+            }, 1000);
         }
     </script>
 </body>
