@@ -162,7 +162,7 @@
             const linkApple = document.createElement('link'); linkApple.rel = 'apple-touch-icon'; linkApple.href = iconUrl; document.head.appendChild(linkApple);
 
             const manifest = {
-                "id": "/presupuestador-md3-v3.3.2",
+                "id": "/presupuestador-md3-v3.3.3",
                 "name": "Presupuestos",
                 "short_name": "Presupuestos",
                 "start_url": "./index.html",
@@ -415,7 +415,7 @@
                 </div>
                 
                 <div class="text-center pt-2">
-                    <span class="text-[10px] text-sub bg-surface-high px-2 py-1 rounded-md" id="appVersionDisplay">v3.3.2</span>
+                    <span class="text-[10px] text-sub bg-surface-high px-2 py-1 rounded-md" id="appVersionDisplay">v3.3.3</span>
                 </div>
             </div>
         </div>
@@ -448,7 +448,7 @@
     <script>
         // --- APP CONSTANTS ---
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
-        const APP_VERSION = "v3.3.2 (Tutorial Button Restored)";
+        const APP_VERSION = "v3.3.3 (Restore Saved Details)";
 
         // --- STATE ---
         const normalize = (str) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
@@ -842,7 +842,6 @@
             document.getElementById('staleDataAlert').classList.toggle('hidden', !d || (Date.now() - d < 86400000));
         }
 
-        // --- FIXED: Added missing checkStaleData function ---
         function checkStaleData() {
             updateLastUpdatedLabel();
         }
@@ -892,19 +891,63 @@
             } else { c.classList.remove('scale-100', 'opacity-100'); c.classList.add('scale-95', 'opacity-0'); setTimeout(() => m.classList.add('hidden'), 300); }
         }
         
-        function applySavedFilters() { /* Same simple filter logic */ 
+        function applySavedFilters() { 
              const search = normalize(document.getElementById('savedSearchInput').value);
              const date = document.getElementById('savedDateInput').value;
              const list = document.getElementById('savedListContainer'); list.innerHTML = '';
              const filtered = state.saved.filter(s => (!search || normalize(s.name).includes(search)) && (!date || s.date === date));
-             if(!filtered.length) { list.innerHTML = `<div class="text-center py-10 text-sub opacity-50"><i class="ph ph-ghost text-4xl"></i><p>Nada por aquí</p></div>`; return; }
+             
+             if(!filtered.length) { 
+                 list.innerHTML = `<div class="text-center py-10 text-sub opacity-50"><i class="ph ph-ghost text-4xl"></i><p>Nada por aquí</p></div>`; 
+                 return; 
+             }
+             
              filtered.forEach(s => {
-                 const el = document.createElement('div'); el.className = "bg-surface-container p-4 rounded-2xl border border-white/5 shadow-sm mb-2";
-                 el.innerHTML = `<div class="flex justify-between mb-2"><div><h4 class="font-medium text-on-surface">${s.name}</h4><span class="text-xs text-sub bg-surface-high px-2 py-0.5 rounded-md">${s.date}</span></div><span class="font-bold text-primary">${formatMoney(s.total)}</span></div>
-                 <div class="flex gap-2"><button onclick="window.open('https://wa.me/?text=${encodeURIComponent(s.text)}','_blank')" class="flex-1 h-9 bg-primary text-on-primary rounded-lg text-xs font-medium flex items-center justify-center gap-1"><i class="ph-bold ph-whatsapp-logo"></i> WhatsApp</button><button onclick="deleteSaved(${s.id})" class="w-9 h-9 bg-red-100 text-red-600 rounded-lg flex items-center justify-center"><i class="ph-bold ph-trash"></i></button></div>`;
+                 const el = document.createElement('div'); 
+                 el.className = "bg-surface-container p-4 rounded-2xl border border-white/5 shadow-sm mb-2 transition-all duration-300";
+                 
+                 const detailsId = `details-${s.id}`;
+                 
+                 el.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <h4 class="font-medium text-on-surface">${s.name}</h4>
+                            <span class="text-xs text-sub bg-surface-high px-2 py-0.5 rounded-md">${s.date}</span>
+                        </div>
+                        <span class="font-bold text-primary">${formatMoney(s.total)}</span>
+                    </div>
+                    
+                    <div id="${detailsId}" class="hidden text-xs text-sub font-mono bg-surface-high p-3 rounded-xl mb-3 whitespace-pre-wrap border border-white/5">
+                        ${s.text}
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button onclick="window.open('https://wa.me/?text=${encodeURIComponent(s.text)}','_blank')" class="flex-1 h-9 bg-primary text-on-primary rounded-lg text-xs font-medium flex items-center justify-center gap-1 ripple-container">
+                            <i class="ph-bold ph-whatsapp-logo"></i> WhatsApp
+                        </button>
+                        
+                        <button onclick="toggleDetails('${detailsId}')" class="w-9 h-9 bg-surface-high text-on-surface rounded-lg flex items-center justify-center ripple-container border border-white/10" title="Ver detalles">
+                            <i class="ph-bold ph-eye"></i>
+                        </button>
+
+                        <button onclick="copyToClip(decodeURIComponent('${encodeURIComponent(s.text)}'), 'Copiado')" class="w-9 h-9 bg-surface-high text-on-surface rounded-lg flex items-center justify-center ripple-container border border-white/10" title="Copiar">
+                            <i class="ph-bold ph-copy"></i>
+                        </button>
+                        
+                        <button onclick="deleteSaved(${s.id})" class="w-9 h-9 bg-red-100 text-red-600 rounded-lg flex items-center justify-center ripple-container">
+                            <i class="ph-bold ph-trash"></i>
+                        </button>
+                    </div>
+                 `;
                  list.appendChild(el);
              });
         }
+
+        function toggleDetails(id) {
+            const el = document.getElementById(id);
+            if(el) el.classList.toggle('hidden');
+        }
+
         function deleteSaved(id) { if(confirm("¿Borrar?")) { state.saved = state.saved.filter(s => s.id !== id); saveSaved(); applySavedFilters(); } }
 
         // --- TUTORIAL ---
