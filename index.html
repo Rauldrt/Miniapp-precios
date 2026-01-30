@@ -163,7 +163,7 @@
 
             // 2. GENERACIÓN DEL MANIFIESTO (DATA URI)
             const manifest = {
-                "id": "/presupuestador-pwa-v3.6",
+                "id": "/presupuestador-pwa-v3.7",
                 "name": "Presupuestos",
                 "short_name": "Presupuestos",
                 "start_url": ".",
@@ -179,7 +179,7 @@
             // 3. SERVICE WORKER INCRUSTADO (BLOB URL)
             if ('serviceWorker' in navigator) {
                 const swCode = `
-                    const CACHE_NAME = 'presupuestos-cache-v3.6';
+                    const CACHE_NAME = 'presupuestos-cache-v3.7';
                     const urlsToCache = [
                         './',
                         'https://cdn.tailwindcss.com',
@@ -289,6 +289,10 @@
                 <input type="text" id="searchInput" placeholder="Buscar productos..." 
                        class="bg-transparent flex-1 outline-none text-[16px]"
                        autocomplete="off">
+                <!-- Botón de Micrófono -->
+                <button id="micBtn" class="text-sub p-1 rounded-full hover:bg-black/10 transition flex items-center justify-center" aria-label="Búsqueda por voz">
+                    <i class="ph-bold ph-microphone text-xl"></i>
+                </button>
                 <button id="clearSearch" class="hidden text-sub p-1 rounded-full hover:bg-black/10 transition" onclick="clearInput()">
                     <i class="ph-fill ph-x-circle text-xl"></i>
                 </button>
@@ -479,7 +483,7 @@
                 </div>
                 
                 <div class="text-center pt-2">
-                    <span class="text-[10px] text-sub bg-surface-high px-2 py-1 rounded-md" id="appVersionDisplay">v3.6</span>
+                    <span class="text-[10px] text-sub bg-surface-high px-2 py-1 rounded-md" id="appVersionDisplay">v3.7</span>
                 </div>
             </div>
         </div>
@@ -512,7 +516,7 @@
     <script>
         // --- APP CONSTANTS ---
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
-        const APP_VERSION = "v3.6 (Rounded Cart)";
+        const APP_VERSION = "v3.7 (Voice Search)";
 
         // --- STATE ---
         const normalize = (str) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
@@ -539,6 +543,7 @@
             applyThemeUI();
             
             setupSearch();
+            setupVoiceSearch(); // Nueva función de voz
             setupConfigListeners();
             renderList();
             checkStaleData();
@@ -546,6 +551,62 @@
             document.getElementById('appVersionDisplay').textContent = APP_VERSION;
             if (!localStorage.getItem('tutorial_seen')) setTimeout(() => startTutorial(), 500);
         });
+
+        // --- VOICE SEARCH ---
+        function setupVoiceSearch() {
+            const micBtn = document.getElementById('micBtn');
+            const micIcon = micBtn.querySelector('i');
+            
+            // Comprobar soporte
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                micBtn.style.display = 'none'; // Ocultar si no soporta
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            
+            recognition.lang = 'es-ES'; // Configurar idioma
+            recognition.continuous = false; // Parar al terminar de hablar
+            recognition.interimResults = false;
+
+            micBtn.addEventListener('click', () => {
+                if (micBtn.classList.contains('listening')) {
+                    recognition.stop();
+                } else {
+                    recognition.start();
+                }
+            });
+
+            recognition.onstart = () => {
+                micBtn.classList.add('listening', 'text-red-500', 'animate-pulse');
+                micIcon.classList.remove('ph-microphone');
+                micIcon.classList.add('ph-stop-circle');
+            };
+
+            recognition.onend = () => {
+                micBtn.classList.remove('listening', 'text-red-500', 'animate-pulse');
+                micIcon.classList.add('ph-microphone');
+                micIcon.classList.remove('ph-stop-circle');
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                const inp = document.getElementById('searchInput');
+                
+                // Llenar input y buscar
+                inp.value = transcript;
+                renderList(transcript);
+                
+                // Mostrar botón de limpiar
+                document.getElementById('clearSearch').classList.remove('hidden');
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Error reconocimiento voz:", event.error);
+                micBtn.classList.remove('listening', 'text-red-500', 'animate-pulse');
+            };
+        }
 
         // --- THEMING LOGIC ---
         function hexToHSL(hex) {
