@@ -163,7 +163,7 @@
 
             // 2. GENERACIÓN DEL MANIFIESTO (DATA URI)
             const manifest = {
-                "id": "/presupuestador-pwa-v3.4",
+                "id": "/presupuestador-pwa-v3.6",
                 "name": "Presupuestos",
                 "short_name": "Presupuestos",
                 "start_url": ".",
@@ -177,10 +177,9 @@
             const linkManifest = document.createElement('link'); linkManifest.rel = 'manifest'; linkManifest.href = manifestUrl; document.head.appendChild(linkManifest);
 
             // 3. SERVICE WORKER INCRUSTADO (BLOB URL)
-            // Esto permite que la app funcione offline cacheando los recursos externos y el propio HTML.
             if ('serviceWorker' in navigator) {
                 const swCode = `
-                    const CACHE_NAME = 'presupuestos-cache-v3.4';
+                    const CACHE_NAME = 'presupuestos-cache-v3.6';
                     const urlsToCache = [
                         './',
                         'https://cdn.tailwindcss.com',
@@ -189,14 +188,11 @@
                     ];
 
                     self.addEventListener('install', event => {
-                        self.skipWaiting(); // Forzar activación inmediata
+                        self.skipWaiting();
                         event.waitUntil(
                             caches.open(CACHE_NAME).then(cache => {
-                                // Intentamos cachear todo, pero no fallamos si uno falla (ej. si offline al instalar)
                                 return Promise.all(
-                                    urlsToCache.map(url => 
-                                        cache.add(url).catch(err => console.log('SW: Falló cache de ' + url))
-                                    )
+                                    urlsToCache.map(url => cache.add(url).catch(err => console.log('SW: Falló cache de ' + url)))
                                 );
                             })
                         );
@@ -207,44 +203,32 @@
                             caches.keys().then(cacheNames => {
                                 return Promise.all(
                                     cacheNames.map(cacheName => {
-                                        if (cacheName !== CACHE_NAME) {
-                                            return caches.delete(cacheName);
-                                        }
+                                        if (cacheName !== CACHE_NAME) return caches.delete(cacheName);
                                     })
                                 );
                             })
                         );
-                        self.clients.claim(); // Tomar control de clientes inmediatamente
+                        self.clients.claim();
                     });
 
                     self.addEventListener('fetch', event => {
-                        // Estrategia: Network First para datos (Google Sheets), Cache First para assets
                         const url = new URL(event.request.url);
-                        
                         if (url.hostname.includes('docs.google.com')) {
-                            // Para el CSV de datos, intentar red primero, fallback a nada (o cache si quisieramos datos offline viejos)
                             event.respondWith(fetch(event.request).catch(() => new Response('Offline')));
                             return;
                         }
-
-                        // Para todo lo demás (assets, html), Cache First, luego Network
                         event.respondWith(
                             caches.match(event.request).then(response => {
                                 return response || fetch(event.request).then(networkResponse => {
-                                    // Opcional: Cachear nuevas peticiones dinámicamente
                                     return networkResponse;
                                 });
                             })
                         );
                     });
                 `;
-                
                 const blob = new Blob([swCode], {type: 'application/javascript'});
                 const swUrl = URL.createObjectURL(blob);
-                
-                navigator.serviceWorker.register(swUrl)
-                    .then(reg => console.log('SW registrado', reg))
-                    .catch(err => console.log('SW error', err));
+                navigator.serviceWorker.register(swUrl).catch(err => console.log('SW error', err));
             }
         })();
 
@@ -353,13 +337,20 @@
         </div>
     </div>
 
-    <!-- 6. FULLSCREEN CART MODAL -->
-    <div id="cartModal" class="fixed inset-0 z-50 flex flex-col h-[100dvh] bg-surface transform translate-y-full transition-transform duration-500 ease-emphasized">
-        <div class="pt-2 pb-4 px-4 bg-surface shrink-0 border-b border-white/5" onclick="toggleCartView()">
-            <div class="w-12 h-1.5 bg-gray-400 opacity-20 rounded-full mx-auto mb-4"></div>
+    <!-- 6. CART MODAL (Responsive with Rounded Corners) -->
+    <!-- Backdrop for Desktop -->
+    <div id="cartBackdrop" onclick="toggleCartView()" class="fixed inset-0 bg-black/40 z-40 hidden opacity-0 transition-opacity duration-500 backdrop-blur-sm"></div>
+
+    <div id="cartModal" class="fixed z-50 flex flex-col bg-surface shadow-2xl transition-transform duration-500 ease-emphasized translate-y-[120%]
+            inset-0 h-[100dvh] w-full rounded-t-[28px] overflow-hidden
+            md:inset-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2 md:w-[600px] md:h-[85vh] md:rounded-[32px] md:border md:border-white/10">
+        
+        <!-- Header -->
+        <div class="pt-2 pb-4 px-4 bg-surface shrink-0 border-b border-white/5 cursor-pointer md:cursor-default" onclick="if(window.innerWidth < 768) toggleCartView()">
+            <div class="w-12 h-1.5 bg-gray-400 opacity-20 rounded-full mx-auto mb-4 md:hidden"></div>
             <div class="flex justify-between items-center">
                 <h2 class="text-2xl font-normal text-on-surface">Tu Pedido</h2>
-                <button class="w-10 h-10 rounded-full bg-surface-high flex items-center justify-center text-on-surface ripple-container">
+                <button onclick="toggleCartView()" class="w-10 h-10 rounded-full bg-surface-high flex items-center justify-center text-on-surface ripple-container">
                     <i class="ph-bold ph-caret-down text-xl"></i>
                 </button>
             </div>
@@ -369,7 +360,7 @@
             <!-- Items -->
         </div>
 
-        <div class="p-4 bg-surface-high rounded-t-[28px] shrink-0 pb-[env(safe-area-inset-bottom)] space-y-3">
+        <div class="p-4 bg-surface-high shrink-0 pb-[env(safe-area-inset-bottom)] space-y-3">
             <div class="flex justify-between items-baseline px-2">
                 <span class="text-sm font-medium text-sub">Total estimado</span>
                 <span class="text-3xl font-normal text-primary" id="cartModalTotal">$0,00</span>
@@ -488,7 +479,7 @@
                 </div>
                 
                 <div class="text-center pt-2">
-                    <span class="text-[10px] text-sub bg-surface-high px-2 py-1 rounded-md" id="appVersionDisplay">v3.4</span>
+                    <span class="text-[10px] text-sub bg-surface-high px-2 py-1 rounded-md" id="appVersionDisplay">v3.6</span>
                 </div>
             </div>
         </div>
@@ -521,7 +512,7 @@
     <script>
         // --- APP CONSTANTS ---
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
-        const APP_VERSION = "v3.4 (PWA Offline)";
+        const APP_VERSION = "v3.6 (Rounded Cart)";
 
         // --- STATE ---
         const normalize = (str) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
@@ -880,7 +871,7 @@
                     <div class="flex items-center bg-surface-container-high rounded-full p-1 gap-3">
                         <button onclick="updQty(${p.id}, -1)" class="w-8 h-8 rounded-full bg-surface shadow-sm flex items-center justify-center text-red-400 active:scale-90 transition"><i class="ph-bold ${qty===1?'ph-trash':'ph-minus'}"></i></button>
                         <span class="font-bold text-on-surface w-4 text-center">${qty}</span>
-                        <button onclick="updQty(${p.id}, 1)" class="w-8 h-8 rounded-full bg-primary shadow-sm flex items-center justify-center text-on-primary active:scale-90 transition"><i class="ph-bold ph-plus"></i></button>
+                        <button onclick="updQty(${p.id}, 1)" class="w-8 h-8 rounded-full bg-primary shadow-sm flex items-center justify-center text-on-primary active:scale-90 transition"><i class="ph-bold ph-plus text-xs"></i></button>
                     </div>
                 `;
                 list.appendChild(item);
@@ -889,8 +880,33 @@
 
         function toggleCartView() {
             const modal = document.getElementById('cartModal');
-            const isClosed = modal.classList.contains('translate-y-full');
-            isClosed ? modal.classList.remove('translate-y-full') : modal.classList.add('translate-y-full');
+            const backdrop = document.getElementById('cartBackdrop');
+            const isClosed = modal.classList.contains('translate-y-[120%]');
+            
+            if(isClosed) {
+                // Abrir
+                modal.classList.remove('translate-y-[120%]');
+                modal.classList.add('translate-y-0');
+                
+                // Mostrar backdrop
+                backdrop.classList.remove('hidden');
+                // Timeout para permitir que el display:block se aplique antes de la opacidad
+                requestAnimationFrame(() => {
+                    backdrop.classList.remove('opacity-0');
+                    backdrop.classList.add('opacity-100');
+                });
+            } else {
+                // Cerrar
+                modal.classList.remove('translate-y-0');
+                modal.classList.add('translate-y-[120%]');
+                
+                // Ocultar backdrop
+                backdrop.classList.remove('opacity-100');
+                backdrop.classList.add('opacity-0');
+                setTimeout(() => {
+                    backdrop.classList.add('hidden');
+                }, 500); // Esperar animación
+            }
         }
 
         // --- UTILS & HELPERS ---
