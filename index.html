@@ -158,10 +158,19 @@
         // --- REGISTRO DE SERVICE WORKER ---
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                // Registramos sw.js que debe estar en la misma carpeta
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW registrado correctamente:', reg.scope))
-                    .catch(err => console.log('SW error al registrar:', err));
+                // VALIDACIÓN IMPORTANTE: 
+                // Los Service Workers solo funcionan en 'localhost' o en dominios 'https'.
+                // No funcionan en 'file://' ni en entornos de previsualización tipo 'blob:'.
+                // Esta comprobación evita el error en consola mientras desarrollas.
+                const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
+                
+                if (isSecure) {
+                    navigator.serviceWorker.register('./sw.js')
+                        .then(reg => console.log('SW registrado correctamente:', reg.scope))
+                        .catch(err => console.log('SW error al registrar:', err));
+                } else {
+                    console.log('SW: Omitido en este entorno (requiere HTTPS o localhost para funcionar).');
+                }
             });
         }
 
@@ -425,7 +434,7 @@
                 </div>
                 
                 <div class="text-center pt-2">
-                    <span class="text-[10px] text-sub bg-surface-high px-2 py-1 rounded-md" id="appVersionDisplay">v3.9</span>
+                    <span class="text-[10px] text-sub bg-surface-high px-2 py-1 rounded-md" id="appVersionDisplay">v3.10</span>
                 </div>
             </div>
         </div>
@@ -458,7 +467,7 @@
     <script>
         // --- APP CONSTANTS ---
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
-        const APP_VERSION = "v3.9 (PWA Standard)";
+        const APP_VERSION = "v3.10 (PWA Protocol Fix)";
 
         // --- STATE ---
         const normalize = (str) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
