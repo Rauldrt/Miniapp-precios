@@ -5,11 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Presupuestador Material</title>
     
-    <!-- PWA Config (Se actualizará dinámicamente con JS) -->
+    <!-- PWA Config Estándar -->
     <meta id="themeColorMeta" name="theme-color" content="#F4FBF9">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Presupuestos">
+
+    <!-- Vincular Manifiesto -->
+    <link rel="manifest" href="./manifest.json">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -20,7 +23,7 @@
     
     <style>
         :root {
-            /* Variables Dinámicas - Se sobrescriben con JS */
+            /* Variables Dinámicas */
             --primary: #006A60;
             --on-primary: #FFFFFF;
             --primary-container: #74F8E5;
@@ -36,14 +39,14 @@
 
         /* Modo Oscuro Nativo por Clase */
         .dark-mode {
-            --primary: #80D8C8; /* Color más claro para contraste en oscuro */
+            --primary: #80D8C8; 
             --on-primary: #003731;
             --primary-container: #005048;
             --on-primary-container: #74F8E5;
-            --secondary-container: #344C47; /* Contenedor de variantes */
-            --surface: #101413; /* Fondo casi negro */
-            --surface-container: #1D201F; /* Tarjetas */
-            --surface-container-high: #272B29; /* Modales */
+            --secondary-container: #344C47; 
+            --surface: #101413; 
+            --surface-container: #1D201F; 
+            --surface-container-high: #272B29; 
             --outline: #89938F;
             --text-main: #E1E3DF;
             --text-sub: #BFC9C6;
@@ -80,7 +83,7 @@
             color: var(--text-main);
         }
         .md-card.selected {
-            background-color: var(--secondary-container); /* Color de selección */
+            background-color: var(--secondary-container); 
             box-shadow: 0 0 0 2px var(--primary);
         }
 
@@ -152,84 +155,23 @@
     </style>
 
     <script>
-        // --- SCRIPT PWA COMPLETO (MANIFEST + SERVICE WORKER) ---
+        // --- REGISTRO DE SERVICE WORKER ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // Registramos sw.js que debe estar en la misma carpeta
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW registrado correctamente:', reg.scope))
+                    .catch(err => console.log('SW error al registrar:', err));
+            });
+        }
+
+        // --- ICONO FLOTANTE PARA iOS/DESKTOP ---
+        // Generamos el favicon al vuelo solo para visualización en navegador
         (function() {
-            // 1. GENERACIÓN DE ICONOS E INSERCIÓN EN HEAD
             const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="128" fill="#006A60"/><path d="M362 166c-11-11-28-14-48-9l-30 7c-54 13-102 61-115 115l-7 30c-4 20-1 37 9 48 14 14 37 14 61-9l8-7c3-3 8-3 12 0l39 39c3 4 3 9 0 12l-7 8c-23 24-23 47-9 61 18 18 58 10 87-17l39-39c29-29 36-69 18-87-14-14-37-14-61 9l-8 7c-3 4-8 4-12 0l-39-39c-4-4-4-9 0-12l7-8c23-24 23-47 9-61z" fill="white" opacity="0.4"/><path d="M256 96c-88 0-160 72-160 160s72 160 160 160 160-72 160-160S344 96 256 96zm0 280c-66 0-120-54-120-120s54-120 120-120 120 54 120 120-54 120-120 120zm-14-186h-28v80h-54v28h54v54h28v-54h54v-28h-54v-80z" fill="white"/></svg>`;
             const iconUrl = "data:image/svg+xml;base64," + btoa(iconSvg);
-            
             const linkIcon = document.createElement('link'); linkIcon.rel = 'icon'; linkIcon.href = iconUrl; document.head.appendChild(linkIcon);
             const linkApple = document.createElement('link'); linkApple.rel = 'apple-touch-icon'; linkApple.href = iconUrl; document.head.appendChild(linkApple);
-
-            // 2. GENERACIÓN DEL MANIFIESTO (DATA URI)
-            const manifest = {
-                "id": "/presupuestador-pwa-v3.8",
-                "name": "Presupuestos",
-                "short_name": "Presupuestos",
-                "start_url": ".",
-                "display": "standalone",
-                "background_color": "#F4FBF9",
-                "theme_color": "#006A60",
-                "orientation": "portrait",
-                "icons": [{"src": iconUrl, "sizes": "512x512", "type": "image/svg+xml"}]
-            };
-            const manifestUrl = "data:application/manifest+json;base64," + btoa(JSON.stringify(manifest));
-            const linkManifest = document.createElement('link'); linkManifest.rel = 'manifest'; linkManifest.href = manifestUrl; document.head.appendChild(linkManifest);
-
-            // 3. SERVICE WORKER INCRUSTADO (BLOB URL)
-            if ('serviceWorker' in navigator) {
-                const swCode = `
-                    const CACHE_NAME = 'presupuestos-cache-v3.8';
-                    const urlsToCache = [
-                        './',
-                        'https://cdn.tailwindcss.com',
-                        'https://unpkg.com/@phosphor-icons/web',
-                        'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap'
-                    ];
-
-                    self.addEventListener('install', event => {
-                        self.skipWaiting();
-                        event.waitUntil(
-                            caches.open(CACHE_NAME).then(cache => {
-                                return Promise.all(
-                                    urlsToCache.map(url => cache.add(url).catch(err => console.log('SW: Falló cache de ' + url)))
-                                );
-                            })
-                        );
-                    });
-
-                    self.addEventListener('activate', event => {
-                        event.waitUntil(
-                            caches.keys().then(cacheNames => {
-                                return Promise.all(
-                                    cacheNames.map(cacheName => {
-                                        if (cacheName !== CACHE_NAME) return caches.delete(cacheName);
-                                    })
-                                );
-                            })
-                        );
-                        self.clients.claim();
-                    });
-
-                    self.addEventListener('fetch', event => {
-                        const url = new URL(event.request.url);
-                        if (url.hostname.includes('docs.google.com')) {
-                            event.respondWith(fetch(event.request).catch(() => new Response('Offline')));
-                            return;
-                        }
-                        event.respondWith(
-                            caches.match(event.request).then(response => {
-                                return response || fetch(event.request).then(networkResponse => {
-                                    return networkResponse;
-                                });
-                            })
-                        );
-                    });
-                `;
-                const blob = new Blob([swCode], {type: 'application/javascript'});
-                const swUrl = URL.createObjectURL(blob);
-                navigator.serviceWorker.register(swUrl).catch(err => console.log('SW error', err));
-            }
         })();
 
         // --- RIPPLE EFFECT ---
@@ -483,7 +425,7 @@
                 </div>
                 
                 <div class="text-center pt-2">
-                    <span class="text-[10px] text-sub bg-surface-high px-2 py-1 rounded-md" id="appVersionDisplay">v3.8</span>
+                    <span class="text-[10px] text-sub bg-surface-high px-2 py-1 rounded-md" id="appVersionDisplay">v3.9</span>
                 </div>
             </div>
         </div>
@@ -516,7 +458,7 @@
     <script>
         // --- APP CONSTANTS ---
         const URL_FIJA_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS8v6EfTn5QfJPDmaCZRfFaAmkdopFrYPBh9N0s3ifH3_q257I_zgXxNz-GJUByuQbAgc0kfeXLZEJZ/pub?gid=1147648108&single=true&output=csv"; 
-        const APP_VERSION = "v3.8 (Client Name in Export)";
+        const APP_VERSION = "v3.9 (PWA Standard)";
 
         // --- STATE ---
         const normalize = (str) => str ? str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
